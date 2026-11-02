@@ -82,18 +82,86 @@ const mobile = matchMedia('(pointer: coarse)').matches;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mobile ? 1.35 : 1.75));
 renderer.shadowMap.enabled = !mobile;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-const clock = new THREE.Clock();
+renderer.shadowMap.type = THREE.PCFShadowMap;
+const clock = new THREE.Timer();
+clock.connect(document);
 const world = new THREE.Group(); scene.add(world);
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshStandardMaterial({ color: 0x182326, roughness: 1 }));
+
+function makeNoiseTexture(base, accent) {
+  const size = 128;
+  const canvasTexture = document.createElement('canvas');
+  canvasTexture.width = size; canvasTexture.height = size;
+  const ctx = canvasTexture.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, size, size);
+  gradient.addColorStop(0, base);
+  gradient.addColorStop(1, accent);
+  ctx.fillStyle = gradient; ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 1800; i++) {
+    const x = Math.random() * size, y = Math.random() * size;
+    const radius = Math.random() * 2.2 + 0.4;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.17})`;
+    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+  }
+  for (let y = 0; y < size; y += 8) {
+    ctx.strokeStyle = `rgba(0,0,0,${Math.random() * 0.12})`;
+    ctx.beginPath();
+    for (let x = 0; x <= size; x += 4) {
+      const px = x, py = y + Math.sin(x * 0.14 + y * 0.08) * 6;
+      if (x === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvasTexture);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2, 2);
+  return texture;
+}
+
+const groundTexture = makeNoiseTexture('#1e2a2d', '#10191d');
+const rubbleTexture = makeNoiseTexture('#3a4042', '#1d2326');
+const floorShader = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uTexture: { value: groundTexture },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    varying vec3 vWorldPos;
+    void main() {
+      vUv = uv;
+      vec4 world = modelMatrix * vec4(position, 1.0);
+      vWorldPos = world.xyz;
+      gl_Position = projectionMatrix * viewMatrix * world;
+    }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    uniform sampler2D uTexture;
+    varying vec2 vUv;
+    varying vec3 vWorldPos;
+    void main() {
+      vec2 uv = vUv * 10.0 + vec2(0.0, uTime * 0.04);
+      vec4 tex = texture2D(uTexture, uv);
+      float ripple = sin((vUv.x + vUv.y) * 20.0 + uTime * 0.8) * 0.06;
+      float grain = clamp(tex.r * 2.0 + ripple + 0.25, 0.0, 1.0);
+      float puddle = smoothstep(0.58, 0.82, grain + ripple);
+      vec3 color = mix(vec3(0.045, 0.065, 0.067), vec3(0.19, 0.25, 0.24), grain);
+      color = mix(color, vec3(0.075, 0.12, 0.13), puddle * 0.55);
+      float fog = 1.0 - smoothstep(40.0, 110.0, length(vWorldPos.xz));
+      color = mix(vec3(0.012, 0.022, 0.025), color, fog);
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+});
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 240, 64, 64), floorShader);
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; world.add(floor);
 scene.add(new THREE.HemisphereLight(0xb7d4d7, 0x121715, 1.15));
 const moon = new THREE.DirectionalLight(0xd4e1dc, 1.35); moon.position.set(-12, 24, 6); moon.castShadow = !mobile; moon.shadow.mapSize.set(512, 512); scene.add(moon);
 const bounds = 90;
 
 // Ruined blocks and road debris give the arena a readable post-apocalyptic silhouette.
-const concrete = new THREE.MeshStandardMaterial({ color: 0x263336, roughness: 0.95 });
-const rust = new THREE.MeshStandardMaterial({ color: 0x493b32, roughness: 1 });
+const concrete = new THREE.MeshStandardMaterial({ map: rubbleTexture, color: 0x263336, roughness: 0.95 });
+const rust = new THREE.MeshStandardMaterial({ map: rubbleTexture, color: 0x493b32, roughness: 1 });
 for (let i = 0; i < 36; i++) {
   const a = i * Math.PI * 2 / 36, r = rand(28, 62), x = Math.cos(a) * r, z = Math.sin(a) * r;
   const h = rand(2.5, 9), w = rand(3, 8);
@@ -308,7 +376,14 @@ function update(dt) {
   updateBullets(dt); updateEnemies(dt); updatePickups(dt); updateParticles(dt); updateWave(dt); updateHud(); drawMap();
 }
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); }
-function animate() { const dt = clamp(clock.getDelta(), .001, .04); update(dt); renderer.render(scene, camera); requestAnimationFrame(animate); }
+function animate() {
+  clock.update();
+  const dt = clamp(clock.getDelta(), .001, .04);
+  floorShader.uniforms.uTime.value += dt;
+  update(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
 
 function beginNextWave(upgrade) {
   const p = S.player;

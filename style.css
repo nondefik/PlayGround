@@ -88,3 +88,17 @@ h2 { font-size: clamp(2rem, 7vw, 3.2rem); }
   .upgrade-choices { grid-template-columns: 1fr; }
   .upgrade-choices button { min-height: 58px; }
 }
+@media (max-width: 390px) {
+  .topbar { gap: 3px; left: 6px; right: 6px; }
+  .panel { padding: 6px; }
+  .vitals { width: 29vw; min-width: 0; flex: 0 0 29vw; }
+  .stats-panel, .weapon-panel { gap: 3px; }
+  .stats-panel strong, .weapon-panel strong { font-size: 9px; }
+  .stats-panel span, .weapon-panel span, .meter-label { font-size: 7px; }
+  #minimap { width: 42px; height: 42px; flex: 0 0 42px; }
+  #pauseButton { flex: 0 0 28px; }
+  .icon-button { width: 28px; height: 28px; }
+}
+@media (max-width: 340px) {
+  #minimap { display: none; }
+}
