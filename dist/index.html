@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zombie Siege</title>
+    <script type="module" crossorigin src="./assets/index-DD3MlHgu.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-D87eLz1j.css">
+  </head>
+  <body>
+    <div id="hud">
+      <div class="topbar">
+        <div class="panel health-panel">
+          <span>Health</span>
+          <div class="bar"><div id="healthBar"></div></div>
+        </div>
+        <div class="panel stats-panel">
+          <span id="waveText">Wave 1</span>
+          <span id="scoreText">Score 0</span>
+        </div>
+        <div class="panel weapon-panel">
+          <span id="weaponText">Rifle</span>
+          <span id="ammoText">30 / 90</span>
+        </div>
+      </div>
+      <div id="crosshair"></div>
+      <div id="messageBox"></div>
+      <div id="controlsHint">WASD Move • Mouse Aim • Click Shoot • Shift Sprint • Space Dodge • R Reload • 1-2 Swap Weapon</div>
+    </div>
+
+    <div id="startScreen" class="overlay visible">
+      <div class="panel title-panel">
+        <h1>Zombie Siege</h1>
+        <p>Hold the line against endless hordes.</p>
+        <button id="startButton">Start Mission</button>
+      </div>
+    </div>
+
+    <div id="gameOverScreen" class="overlay hidden">
+      <div class="panel title-panel">
+        <h2>Mission Failed</h2>
+        <p id="finalStats">You survived 0 waves.</p>
+        <button id="restartButton">Retry</button>
+      </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+  </body>
+</html>
