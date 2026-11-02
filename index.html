@@ -1,49 +1,108 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zombie Siege</title>
-    <script type="module" crossorigin src="./assets/index-dxvJCZSt.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-D87eLz1j.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#071016" />
+    <title>Зона заражения — выживание</title>
+    <script type="module" crossorigin src="./assets/index-gctICMwj.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/three-YBxEc3Nf.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-Dzky7_uC.css">
   </head>
   <body>
+    <canvas id="gameCanvas" aria-label="3D-игра: зомби-выживание"></canvas>
+
     <div id="hud">
-      <div class="topbar">
-        <div class="panel health-panel">
-          <span>Health</span>
+      <header class="topbar">
+        <section class="panel vitals">
+          <div class="meter-label"><span>ЗДОРОВЬЕ</span><strong id="healthValue">100</strong></div>
           <div class="bar"><div id="healthBar"></div></div>
-        </div>
-        <div class="panel stats-panel">
-          <span id="waveText">Wave 1</span>
-          <span id="scoreText">Score 0</span>
-        </div>
-        <div class="panel weapon-panel">
-          <span id="weaponText">Rifle</span>
-          <span id="ammoText">30 / 90</span>
-        </div>
+          <div class="meter-label stamina-label"><span>ВЫНОСЛИВОСТЬ</span><strong id="staminaValue">100</strong></div>
+          <div class="bar stamina-bar"><div id="staminaBar"></div></div>
+        </section>
+        <section class="panel stats-panel">
+          <strong id="waveText">ВОЛНА 1</strong>
+          <span id="scoreText">СЧЁТ 0</span>
+          <span id="timerText">00:00</span>
+        </section>
+        <section class="panel weapon-panel">
+          <span id="weaponText">ПИСТОЛЕТ</span>
+          <strong id="ammoText">12 / 72</strong>
+        </section>
+        <canvas id="minimap" width="128" height="128" aria-label="Мини-карта"></canvas>
+        <button id="pauseButton" class="icon-button" aria-label="Пауза">Ⅱ</button>
+      </header>
+      <div id="crosshair"><i></i></div>
+      <div id="messageBox" role="status"></div>
+      <div id="controlsHint">ЛЕВЫЙ СТИК — ДВИЖЕНИЕ • ПРАВАЯ ЧАСТЬ — ОБЗОР • ПК: WASD + МЫШЬ</div>
+
+      <div id="joystick" aria-label="Виртуальный джойстик"><div class="stick-ring"></div><div id="stickThumb"></div></div>
+      <div id="touchActions">
+        <button id="weaponPrev" class="touch-button small-action" aria-label="Предыдущее оружие">‹</button>
+        <button id="weaponNext" class="touch-button small-action" aria-label="Следующее оружие">›</button>
+        <button id="inventoryButton" class="touch-button small-action" aria-label="Инвентарь">▣</button>
+        <button id="reloadButton" class="touch-button small-action" aria-label="Перезарядка">↻</button>
+        <button id="crouchButton" class="touch-button small-action" aria-label="Присесть">▽</button>
+        <button id="jumpButton" class="touch-button small-action" aria-label="Прыжок">↑</button>
+        <button id="fireButton" class="touch-button fire-button" aria-label="Стрелять">ОГОНЬ</button>
       </div>
-      <div id="crosshair"></div>
-      <div id="messageBox"></div>
-      <div id="controlsHint">WASD Move • Mouse Aim • Click Shoot • Shift Sprint • Space Dodge • R Reload • 1-2 Swap Weapon</div>
     </div>
 
     <div id="startScreen" class="overlay visible">
       <div class="panel title-panel">
-        <h1>Zombie Siege</h1>
-        <p>Hold the line against endless hordes.</p>
-        <button id="startButton">Start Mission</button>
+        <p class="eyebrow">ВОЕННАЯ ЗОНА · УРОВЕНЬ ЗАРАЖЕНИЯ КРИТИЧЕСКИЙ</p>
+        <h1>ЗОНА<br />ЗАРАЖЕНИЯ</h1>
+        <p>Город пал. Держитесь как можно дольше, собирайте припасы и не подпускайте заражённых.</p>
+        <button id="startButton">НАЧАТЬ ВЫЖИВАНИЕ</button>
+        <small>На телефоне: стик слева, обзор и стрельба справа.</small>
+      </div>
+    </div>
+
+    <div id="pauseScreen" class="overlay hidden">
+      <div class="panel title-panel">
+        <p class="eyebrow">ПЕРЕДЫШКА НЕ БУДЕТ ДОЛГОЙ</p>
+        <h2>ПАУЗА</h2>
+        <p id="pauseStats">Подготовьтесь к следующей атаке.</p>
+        <button id="resumeButton">ПРОДОЛЖИТЬ</button>
+      </div>
+    </div>
+
+    <div id="upgradeScreen" class="overlay hidden">
+      <div class="panel upgrade-panel">
+        <p class="eyebrow">ВОЛНА ОТБИТА · СОБЕРИТЕСЬ</p>
+        <h2>УЛУЧШЕНИЕ</h2>
+        <p>Выберите награду перед следующей волной</p>
+        <div class="upgrade-choices">
+          <button data-upgrade="damage"><strong>Усиленные патроны</strong><span>Урон оружия +20%</span></button>
+          <button data-upgrade="health"><strong>Аптечка</strong><span>Здоровье +40</span></button>
+          <button data-upgrade="ammo"><strong>Запас боеприпасов</strong><span>Пополнить все патроны</span></button>
+        </div>
+        <button id="skipUpgrade" class="secondary-button">ПРОПУСТИТЬ</button>
+      </div>
+    </div>
+
+    <div id="inventoryScreen" class="overlay hidden">
+      <div class="panel title-panel inventory-panel">
+        <p class="eyebrow">СНАРЯЖЕНИЕ</p>
+        <h2>ОРУЖИЕ</h2>
+        <div class="weapon-list">
+          <button data-weapon="pistol">1 · ПИСТОЛЕТ</button>
+          <button data-weapon="shotgun">2 · ДРОБОВИК</button>
+          <button data-weapon="rifle">3 · АВТОМАТ</button>
+          <button data-weapon="knife">4 · НОЖ</button>
+        </div>
+        <button id="closeInventory" class="secondary-button">ЗАКРЫТЬ</button>
       </div>
     </div>
 
     <div id="gameOverScreen" class="overlay hidden">
       <div class="panel title-panel">
-        <h2>Mission Failed</h2>
-        <p id="finalStats">You survived 0 waves.</p>
-        <button id="restartButton">Retry</button>
+        <p class="eyebrow">СВЯЗЬ ПОТЕРЯНА</p>
+        <h2>ВЫ ПОГИБЛИ</h2>
+        <p id="finalStats">Вы продержались 0 секунд.</p>
+        <button id="restartButton">ПОПРОБОВАТЬ СНОВА</button>
       </div>
     </div>
 
-    <canvas id="gameCanvas"></canvas>
   </body>
 </html>
