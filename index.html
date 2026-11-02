@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f14" />
+    <title>Last Day on Earth: Survival</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="game-shell">
+      <header class="hud topbar">
+        <div class="brand">Last Day on Earth: Survival</div>
+        <div class="stats">
+          <div><span>Day</span><strong id="dayValue">1</strong></div>
+          <div><span>Food</span><strong id="foodValue">30</strong></div>
+          <div><span>Water</span><strong id="waterValue">28</strong></div>
+          <div><span>Health</span><strong id="healthValue">100</strong></div>
+          <div><span>Energy</span><strong id="energyValue">100</strong></div>
+        </div>
+      </header>
+
+      <main class="play-area">
+        <aside class="panel left-panel">
+          <h3>Objectives</h3>
+          <ul id="objectiveList">
+            <li>Gather food and water</li>
+            <li>Build shelter</li>
+            <li>Survive the night</li>
+          </ul>
+          <h3>Inventory</h3>
+          <div id="inventory" class="inventory"></div>
+        </aside>
+
+        <section class="arena-wrap">
+          <div id="arena" class="arena" aria-label="Wasteland survival game arena">
+            <div id="messageBox" class="message-box" role="status" aria-live="polite"></div>
+            <div id="player" class="player" aria-label="You"></div>
+            <div id="zombie1" class="enemy zombie" aria-label="Infected"></div>
+            <div id="zombie2" class="enemy zombie" aria-label="Infected"></div>
+            <div id="zombie3" class="enemy zombie" aria-label="Infected"></div>
+            <div id="campfire" class="campfire" aria-label="Campfire"></div>
+            <div id="shelter" class="shelter" aria-label="Shelter"></div>
+            <div id="tree" class="resource tree" aria-label="Wood"></div>
+            <div id="rock" class="resource rock" aria-label="Stone"></div>
+            <div id="water" class="resource water" aria-label="Water"></div>
+            <div id="foodNode" class="resource food-node" aria-label="Food cache"></div>
+          </div>
+        </section>
+
+        <aside class="panel right-panel">
+          <h3>Actions</h3>
+          <div class="controls">
+            <div class="d-pad" aria-label="Movement controls">
+              <button class="north" data-action="move" data-dx="0" data-dy="-1" aria-label="Move north">▲</button>
+              <button class="west" data-action="move" data-dx="-1" data-dy="0" aria-label="Move west">◀</button>
+              <button class="south" data-action="move" data-dx="0" data-dy="1" aria-label="Move south">▼</button>
+              <button class="east" data-action="move" data-dx="1" data-dy="0" aria-label="Move east">▶</button>
+            </div>
+            <button class="action-button attack-button" data-action="attack">⚔ Attack</button>
+            <button class="action-button" data-action="collect">⛏ Gather</button>
+            <button class="action-button" data-action="rest">✚ Use medkit</button>
+            <button class="action-button" data-action="build">⌂ Build shelter</button>
+            <button class="action-button" data-action="upgrade">♨ Fortify camp</button>
+            <button class="action-button primary-action" data-action="night">☾ End day</button>
+            <button class="action-button reset-button" data-action="reset">↻ New run</button>
+            <p class="hint">Move with WASD / arrow keys. Click the ground to walk there.</p>
+          </div>
+          <h3>Log</h3>
+          <div id="eventLog" class="event-log"></div>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
