@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Last Day on Earth: Survival</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="game-shell">
+      <header class="hud">
+        <div class="title-row">
+          <div>
+            <p class="eyebrow">Scavenge. Survive. Hold the line.</p>
+            <h1>Last Day on Earth: Survival</h1>
+          </div>
+          <button id="restart" class="restart">Restart</button>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat"><span>Health</span><strong id="healthVal">100</strong></div>
+          <div class="stat"><span>Hunger</span><strong id="hungerVal">100</strong></div>
+          <div class="stat"><span>Thirst</span><strong id="thirstVal">100</strong></div>
+          <div class="stat"><span>Day</span><strong id="dayVal">1</strong></div>
+          <div class="stat"><span>Night</span><strong id="nightVal">0%</strong></div>
+        </div>
+      </header>
+
+      <main class="game-layout">
+        <div class="canvas-wrap">
+          <canvas id="gameCanvas" width="980" height="560"></canvas>
+        </div>
+
+        <aside class="panel">
+          <div class="card objective-card">
+            <h2>Objective</h2>
+            <p id="objectiveText">Build a campfire and 2 walls, then survive until Day 3.</p>
+          </div>
+
+          <div class="card inventory-card">
+            <h2>Inventory</h2>
+            <ul>
+              <li><span>Wood</span><strong id="woodVal">0</strong></li>
+              <li><span>Stone</span><strong id="stoneVal">0</strong></li>
+              <li><span>Food</span><strong id="foodVal">0</strong></li>
+              <li><span>Herbs</span><strong id="herbsVal">0</strong></li>
+              <li><span>Scrap</span><strong id="scrapVal">0</strong></li>
+            </ul>
+          </div>
+
+          <div class="card craft-card">
+            <h2>Craft</h2>
+            <button data-craft="campfire">Campfire · 6 wood / 4 stone</button>
+            <button data-craft="wall">Wall · 4 wood / 2 stone</button>
+            <button data-craft="medkit">Medkit · 2 herbs / 2 scrap / 1 food</button>
+          </div>
+
+          <div class="card log-card">
+            <h2>Log</h2>
+            <ul id="logList"></ul>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
