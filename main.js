@@ -69,14 +69,14 @@ const S = {
   running: false, paused: false, gameOver: false, time: 0, score: 0, wave: 1, waveDelay: 0, messageTimer: 0,
   damageBonus: 1, keys: new Set(), touch: { x: 0, y: 0, firing: false, crouching: false }, lookPointer: null, joyPointer: null,
   pointerLocked: false, player: { health: 100, stamina: 100, x: 0, y: 1.65, z: 0, yaw: 0, pitch: 0, vy: 0, grounded: true,
-    crouching: false, cooldown: 0, reloadTimer: 0, hitFlash: 0, weapon: 'pistol',
+    crouching: false, cooldown: 0, reloadTimer: 0, hitFlash: 0, muzzleFlash: 0, weapon: 'pistol',
     ammo: { pistol: 12, shotgun: 6, rifle: 30, knife: Infinity }, reserve: { pistol: 72, shotgun: 30, rifle: 120, knife: Infinity } },
   enemies: [], bullets: [], pickups: [], particles: [],
 };
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101b20);
-scene.fog = new THREE.FogExp2(0x101b20, 0.012);
+scene.background = new THREE.Color(0x172326);
+scene.fog = new THREE.FogExp2(0x172326, 0.009);
 const camera = new THREE.PerspectiveCamera(76, 1, 0.1, 150);
 const mobile = matchMedia('(pointer: coarse)').matches;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: 'high-performance' });
@@ -87,38 +87,42 @@ const clock = new THREE.Timer();
 clock.connect(document);
 const world = new THREE.Group(); scene.add(world);
 
-function makeNoiseTexture(base, accent) {
-  const size = 128;
+function makeNoiseTexture(base, accent, repeat = 2) {
+  const size = mobile ? 256 : 512;
   const canvasTexture = document.createElement('canvas');
   canvasTexture.width = size; canvasTexture.height = size;
   const ctx = canvasTexture.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, size, size);
-  gradient.addColorStop(0, base);
-  gradient.addColorStop(1, accent);
+  gradient.addColorStop(0, base); gradient.addColorStop(1, accent);
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 1800; i++) {
+  for (let i = 0; i < (mobile ? 2200 : 4200); i++) {
     const x = Math.random() * size, y = Math.random() * size;
-    const radius = Math.random() * 2.2 + 0.4;
-    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.17})`;
-    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+    const radius = Math.random() * 5 + .5;
+    const moss = Math.random() > .78;
+    ctx.fillStyle = moss ? `rgba(67,82,48,${Math.random() * .22})` : `rgba(210,205,185,${Math.random() * .11})`;
+    ctx.beginPath(); ctx.ellipse(x, y, radius * (moss ? 2 : 1), radius, rand(0, 6), 0, Math.PI * 2); ctx.fill();
   }
-  for (let y = 0; y < size; y += 8) {
-    ctx.strokeStyle = `rgba(0,0,0,${Math.random() * 0.12})`;
-    ctx.beginPath();
-    for (let x = 0; x <= size; x += 4) {
-      const px = x, py = y + Math.sin(x * 0.14 + y * 0.08) * 6;
-      if (x === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    }
+  // Branching hairline cracks and old oil/blood stains break up the repeating surface.
+  for (let i = 0; i < 28; i++) {
+    let x = rand(0, size), y = rand(0, size), angle = rand(0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(5,9,9,${rand(.12,.34)})`; ctx.lineWidth = rand(.7, 2.4); ctx.beginPath(); ctx.moveTo(x, y);
+    for (let j = 0; j < 8; j++) { angle += rand(-.65, .65); x += Math.cos(angle) * rand(5, 15); y += Math.sin(angle) * rand(5, 15); ctx.lineTo(x, y); }
+    ctx.stroke();
+    if (i % 3 === 0) { const g = ctx.createRadialGradient(x, y, 1, x, y, rand(10, 28)); g.addColorStop(0, 'rgba(77,30,24,.34)'); g.addColorStop(1, 'rgba(77,30,24,0)'); ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60); }
+  }
+  for (let y = 0; y < size; y += Math.max(6, size / 32)) {
+    ctx.strokeStyle = `rgba(0,0,0,${Math.random() * 0.1})`; ctx.beginPath();
+    for (let x = 0; x <= size; x += Math.max(4, size / 64)) { const py = y + Math.sin(x * .035 + y * .08) * (size * .012); if (!x) ctx.moveTo(x, py); else ctx.lineTo(x, py); }
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvasTexture);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(2, 2);
+  texture.colorSpace = THREE.SRGBColorSpace; texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(repeat, repeat);
+  texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), mobile ? 4 : 8);
   return texture;
 }
 
 const groundTexture = makeNoiseTexture('#1e2a2d', '#10191d');
-const rubbleTexture = makeNoiseTexture('#3a4042', '#1d2326');
+const rubbleTexture = makeNoiseTexture('#555d5d', '#343b3c');
 const floorShader = new THREE.ShaderMaterial({
   uniforms: {
     uTime: { value: 0 },
@@ -145,29 +149,71 @@ const floorShader = new THREE.ShaderMaterial({
       float ripple = sin((vUv.x + vUv.y) * 20.0 + uTime * 0.8) * 0.06;
       float grain = clamp(tex.r * 2.0 + ripple + 0.25, 0.0, 1.0);
       float puddle = smoothstep(0.58, 0.82, grain + ripple);
-      vec3 color = mix(vec3(0.045, 0.065, 0.067), vec3(0.19, 0.25, 0.24), grain);
-      color = mix(color, vec3(0.075, 0.12, 0.13), puddle * 0.55);
+      vec3 color = mix(vec3(0.075, 0.095, 0.095), vec3(0.28, 0.34, 0.32), grain);
+      color = mix(color, vec3(0.105, 0.16, 0.17), puddle * 0.55);
       float fog = 1.0 - smoothstep(40.0, 110.0, length(vWorldPos.xz));
-      color = mix(vec3(0.012, 0.022, 0.025), color, fog);
+      color = mix(vec3(0.025, 0.04, 0.045), color, fog);
       gl_FragColor = vec4(color, 1.0);
     }
   `,
 });
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 240, 64, 64), floorShader);
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; world.add(floor);
-scene.add(new THREE.HemisphereLight(0xb7d4d7, 0x121715, 1.15));
-const moon = new THREE.DirectionalLight(0xd4e1dc, 1.35); moon.position.set(-12, 24, 6); moon.castShadow = !mobile; moon.shadow.mapSize.set(512, 512); scene.add(moon);
+scene.add(new THREE.HemisphereLight(0xc4dedb, 0x303a35, 1.8));
+const moon = new THREE.DirectionalLight(0xd4e1dc, 1.7); moon.position.set(-12, 24, 6); moon.castShadow = !mobile; moon.shadow.mapSize.set(512, 512); scene.add(moon);
 const bounds = 90;
 
 // Ruined blocks and road debris give the arena a readable post-apocalyptic silhouette.
-const concrete = new THREE.MeshStandardMaterial({ map: rubbleTexture, color: 0x263336, roughness: 0.95 });
-const rust = new THREE.MeshStandardMaterial({ map: rubbleTexture, color: 0x493b32, roughness: 1 });
+const concrete = new THREE.MeshStandardMaterial({ map: rubbleTexture, bumpMap: rubbleTexture, bumpScale: .07, color: 0x89938c, roughness: .96 });
+const rust = new THREE.MeshStandardMaterial({ map: rubbleTexture, bumpMap: rubbleTexture, bumpScale: .09, color: 0xa18468, roughness: .88, metalness: .12 });
 for (let i = 0; i < 36; i++) {
   const a = i * Math.PI * 2 / 36, r = rand(28, 62), x = Math.cos(a) * r, z = Math.sin(a) * r;
   const h = rand(2.5, 9), w = rand(3, 8);
   const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * rand(.7, 1.4)), i % 4 ? concrete : rust);
   block.position.set(x, h / 2, z); block.rotation.y = rand(-.3, .3); block.castShadow = !mobile; block.receiveShadow = true; world.add(block);
 }
+
+// A narrow player flashlight and a few flickering hazard lamps add depth without a post-processing pass.
+const flashlightTarget = new THREE.Object3D(); scene.add(flashlightTarget);
+const flashlight = new THREE.SpotLight(0xc9e1d7, mobile ? 34 : 52, 34, .48, .62, 1.35);
+flashlight.castShadow = !mobile; flashlight.shadow.mapSize.set(512, 512); scene.add(flashlight); flashlight.target = flashlightTarget;
+const hazardLights = [];
+for (let i = 0; i < (mobile ? 3 : 5); i++) {
+  const a = i * Math.PI * 2 / (mobile ? 3 : 5) + .4, r = rand(15, 29), x = Math.cos(a) * r, z = Math.sin(a) * r;
+  const lamp = new THREE.PointLight(i % 2 ? 0xff8a43 : 0xb9d8bd, 2.2, 13, 2); lamp.position.set(x, 2.5, z); scene.add(lamp);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 6, 5), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffa354 : 0xc3e6cf })); bulb.position.set(x, 2.5, z); world.add(bulb);
+  hazardLights.push({ lamp, base: lamp.intensity, phase: rand(0, 8) });
+}
+
+// Simple low-poly first-person weapon silhouettes use shared geometry/materials and stay attached to the camera.
+const weaponModels = {};
+const metalMat = new THREE.MeshStandardMaterial({ color: 0x343b3b, metalness: .78, roughness: .38, map: rubbleTexture, bumpMap: rubbleTexture, bumpScale: .025 });
+const gripMat = new THREE.MeshStandardMaterial({ color: 0x352b25, roughness: .94, map: groundTexture, bumpMap: groundTexture, bumpScale: .04 });
+const muzzleMat = new THREE.MeshBasicMaterial({ color: 0xffd18a, transparent: true, opacity: .9 });
+function weaponPart(group, geometry, material, position, scale) {
+  const mesh = new THREE.Mesh(geometry, material); mesh.position.set(...position); if (scale) mesh.scale.set(...scale); group.add(mesh); return mesh;
+}
+function buildWeaponModel(kind) {
+  const group = new THREE.Group();
+  if (kind === 'knife') {
+    weaponPart(group, new THREE.BoxGeometry(.075, .12, .3), gripMat, [0, -.12, 0]);
+    const blade = weaponPart(group, new THREE.ConeGeometry(.065, .42, 4), metalMat, [0, .13, -.03]); blade.rotation.x = -Math.PI / 2;
+  } else {
+    const long = kind === 'rifle' ? .82 : kind === 'shotgun' ? .78 : .53;
+    weaponPart(group, new THREE.BoxGeometry(.19, .18, long), metalMat, [0, 0, -.14]);
+    weaponPart(group, new THREE.CylinderGeometry(.035, .035, kind === 'shotgun' ? .53 : .42, 8), metalMat, [0, .045, -long * .75], [.85, 1, 1]);
+    weaponPart(group, new THREE.BoxGeometry(.13, .24, .16), gripMat, [0, -.18, .04], [1, 1, 1]);
+    weaponPart(group, new THREE.BoxGeometry(.1, .12, .12), gripMat, [0, -.15, -.23]);
+    if (kind === 'rifle') weaponPart(group, new THREE.BoxGeometry(.14, .25, .12), metalMat, [0, -.2, -.24]);
+  }
+  const flash = weaponPart(group, new THREE.SphereGeometry(.12, 7, 5), muzzleMat, [0, .04, kind === 'knife' ? -.3 : -.65]); flash.visible = false;
+  group.position.set(.38, -.34, -.72); group.rotation.set(-.08, -.04, -.04); camera.add(group);
+  return { group, flash, recoil: 0 };
+}
+for (const kind of weaponOrder) weaponModels[kind] = buildWeaponModel(kind);
+function syncWeaponModel() { for (const [kind, model] of Object.entries(weaponModels)) model.group.visible = kind === S.player.weapon; }
+syncWeaponModel();
+
 // Rain is a single low-cost point cloud.
 const rainCount = mobile ? 240 : 420;
 const rainGeometry = new THREE.BufferGeometry();
@@ -180,6 +226,8 @@ function showMessage(text, duration = 1.2) { $('messageBox').textContent = text;
 function setScreen(name, visible) { screens[name].classList.toggle('hidden', !visible); screens[name].classList.toggle('visible', visible); }
 function updateHud() {
   const p = S.player, weapon = weapons[p.weapon];
+  document.body.classList.toggle('low-health', p.health <= 28 && S.running);
+  $('damageFlash').style.opacity = String(clamp(p.hitFlash * 1.8, 0, .42));
   $('healthBar').style.width = `${clamp(p.health, 0, 100)}%`; $('healthValue').textContent = Math.ceil(p.health);
   $('staminaBar').style.width = `${clamp(p.stamina, 0, 100)}%`; $('staminaValue').textContent = Math.ceil(p.stamina);
   $('waveText').textContent = `ВОЛНА ${S.wave}`; $('scoreText').textContent = `СЧЁТ ${Math.floor(S.score)}`;
@@ -189,14 +237,29 @@ function updateHud() {
   $('crouchButton').classList.toggle('active', p.crouching);
 }
 function removeAll(list) { for (const item of list) world.remove(item.mesh); list.length = 0; }
+const zombieCloth = new THREE.MeshStandardMaterial({ color: 0x74836e, bumpMap: rubbleTexture, bumpScale: .025, emissive: 0x1a241a, emissiveIntensity: .45, roughness: .98 });
+const zombieRunnerCloth = new THREE.MeshStandardMaterial({ color: 0x9b805f, bumpMap: rubbleTexture, bumpScale: .025, emissive: 0x291e12, emissiveIntensity: .4, roughness: .98 });
+const zombieWound = new THREE.MeshStandardMaterial({ color: 0x672c25, roughness: 1 });
+const zombieEye = new THREE.MeshBasicMaterial({ color: 0xff7959 });
 function createEnemy() {
   const roll = Math.random(), type = S.wave >= 3 && roll > .78 ? 'tank' : S.wave >= 2 && roll > .48 ? 'runner' : 'walker';
-  const palette = { walker: 0x6d9275, runner: 0xb18a58, tank: 0x667c82 };
+  const palette = { walker: 0x9bbd9a, runner: 0xc3a16f, tank: 0x9eafb2 };
   const size = type === 'tank' ? 1.45 : type === 'runner' ? .78 : 1;
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.42 * size, .95 * size, 3, 7), new THREE.MeshStandardMaterial({ color: palette[type], roughness: 1 }));
+  const hide = new THREE.MeshStandardMaterial({ color: palette[type], bumpMap: groundTexture, bumpScale: .035, emissive: type === 'runner' ? 0x332416 : 0x263628, emissiveIntensity: .45, roughness: 1 });
+  const cloth = type === 'runner' ? zombieRunnerCloth : zombieCloth;
+  const wound = zombieWound;
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.42 * size, .95 * size, 3, 7), hide);
   const a = Math.random() * Math.PI * 2, d = rand(18, 30);
   body.position.set(S.player.x + Math.cos(a) * d, .72 * size, S.player.z + Math.sin(a) * d); body.castShadow = !mobile; world.add(body);
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(.11 * size, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffc7a2 })); eye.position.set(0, .28 * size, -.37 * size); body.add(eye);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(.11 * size, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff7959 })); eye.position.set(0, .38 * size, -.36 * size); body.add(eye);
+  const shirt = new THREE.Mesh(new THREE.BoxGeometry(.52 * size, .42 * size, .27 * size), cloth); shirt.position.set(0, -.12 * size, -.27 * size); shirt.rotation.x = -.08; body.add(shirt);
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(.095 * size, .46 * size, 2, 5), hide);
+    arm.position.set(side * .48 * size, -.08 * size, -.08 * size); arm.rotation.z = side * -.28; body.add(arm);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(.19 * size, .48 * size, .2 * size), cloth);
+    leg.position.set(side * .2 * size, -.62 * size, 0); body.add(leg);
+  }
+  const tornPatch = new THREE.Mesh(new THREE.SphereGeometry(.12 * size, 6, 4), wound); tornPatch.scale.set(1.4, .45, .35); tornPatch.position.set(.13 * size, .15 * size, -.42 * size); body.add(tornPatch);
   const hp = (type === 'tank' ? 150 : type === 'runner' ? 24 : 48) + S.wave * (type === 'tank' ? 18 : 6);
   return { mesh: body, x: body.position.x, z: body.position.z, hp, maxHp: hp, type,
     speed: (type === 'tank' ? 1.45 : type === 'runner' ? 4.2 : 2.15) + S.wave * .08,
@@ -212,13 +275,17 @@ function spawnPickup(x, z, type = 'medkit') {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(.48, .48, .48), new THREE.MeshStandardMaterial({ color: colors[type], emissive: colors[type], emissiveIntensity: .12 }));
   mesh.position.set(x, .55, z); world.add(mesh); S.pickups.push({ mesh, x, z, type, life: 22 });
 }
-function createParticle(x, y, z, color) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(.1, .1, .1), new THREE.MeshBasicMaterial({ color })); mesh.position.set(x, y, z); world.add(mesh);
-  S.particles.push({ mesh, vx: rand(-2, 2), vy: rand(.4, 2.7), vz: rand(-2, 2), life: rand(.3, .7) });
+const particleGeometry = new THREE.BoxGeometry(.085, .085, .085);
+const particleMaterials = new Map();
+function createParticle(x, y, z, color, kind = 'blood') {
+  if (S.particles.length >= (mobile ? 42 : 90)) return;
+  if (!particleMaterials.has(color)) particleMaterials.set(color, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .92 }));
+  const mesh = new THREE.Mesh(particleGeometry, particleMaterials.get(color)); mesh.position.set(x, y, z); mesh.scale.setScalar(kind === 'dust' ? rand(.7, 1.8) : rand(.65, 1.3)); world.add(mesh);
+  S.particles.push({ mesh, vx: rand(-2, 2), vy: kind === 'dust' ? rand(.15, .8) : rand(.4, 2.7), vz: rand(-2, 2), life: kind === 'dust' ? rand(.25, .48) : rand(.3, .7), kind });
 }
 function setWeapon(name) {
   if (!weapons[name]) return;
-  S.player.weapon = name; S.player.reloadTimer = 0; updateHud();
+  S.player.weapon = name; S.player.reloadTimer = 0; syncWeaponModel(); updateHud();
 }
 function cycleWeapon(direction) { const i = weaponOrder.indexOf(S.player.weapon); setWeapon(weaponOrder[(i + direction + weaponOrder.length) % weaponOrder.length]); }
 function reload() {
@@ -234,7 +301,12 @@ function fire() {
   const p = S.player, w = weapons[p.weapon];
   if (!S.running || S.paused || p.cooldown > 0 || p.reloadTimer > 0) return;
   if (p.weapon !== 'knife' && p.ammo[p.weapon] <= 0) { reload(); return; }
-  p.cooldown = w.rate; if (p.weapon !== 'knife') { p.ammo[p.weapon]--; playSound('shot'); }
+  p.cooldown = w.rate;
+  if (p.weapon !== 'knife') {
+    p.ammo[p.weapon]--; p.muzzleFlash = .075;
+    weaponModels[p.weapon].recoil = Math.min(.13, weaponModels[p.weapon].recoil + .075);
+    playSound('shot');
+  } else weaponModels.knife.recoil = .22;
   const direction = new THREE.Vector3(); camera.getWorldDirection(direction);
   if (p.weapon === 'knife') {
     const target = S.enemies.map((e) => ({ e, d: Math.hypot(e.x - p.x, e.z - p.z) })).filter(({ e, d }) => d < 2.8 && ((e.x - p.x) * direction.x + (e.z - p.z) * direction.z) / Math.max(d, .01) > .25).sort((a, b) => a.d - b.d)[0];
@@ -250,8 +322,10 @@ function fire() {
   }
   if (p.ammo[p.weapon] === 0 && p.reserve[p.weapon] > 0) reload(); updateHud();
 }
-function hitEnemy(enemy, damage) {
+function hitEnemy(enemy, damage, point = null) {
   enemy.hp -= damage; enemy.hit = .12; enemy.mesh.material.emissive.setHex(0x6a1914);
+  const impact = point || new THREE.Vector3(enemy.x, .8, enemy.z);
+  for (let i = 0; i < (mobile ? 2 : 3); i++) createParticle(impact.x, impact.y, impact.z, enemy.type === 'tank' ? 0xb88b4d : 0x9d443e, 'blood');
   if (enemy.hp > 0) return;
   const idx = S.enemies.indexOf(enemy); if (idx < 0) return;
   world.remove(enemy.mesh); S.enemies.splice(idx, 1); S.score += enemy.type === 'tank' ? 60 : enemy.type === 'runner' ? 35 : 25;
@@ -263,8 +337,10 @@ function startGame() {
   initAudio(); setAudioActive(true); ambienceTimer = rand(7, 13);
   S.running = true; S.paused = false; S.gameOver = false; S.time = 0; S.score = 0; S.wave = 1; S.waveDelay = 0; S.damageBonus = 1;
   Object.assign(S.player, { health: 100, stamina: 100, x: 0, y: 1.65, z: 0, yaw: 0, pitch: 0, vy: 0, grounded: true,
-    crouching: false, cooldown: 0, reloadTimer: 0, hitFlash: 0, weapon: 'pistol',
+    crouching: false, cooldown: 0, reloadTimer: 0, hitFlash: 0, muzzleFlash: 0, weapon: 'pistol',
     ammo: { pistol: 12, shotgun: 6, rifle: 30, knife: Infinity }, reserve: { pistol: 72, shotgun: 30, rifle: 120, knife: Infinity } });
+  for (const model of Object.values(weaponModels)) model.recoil = 0;
+  syncWeaponModel();
   removeAll(S.enemies); removeAll(S.bullets); removeAll(S.pickups); removeAll(S.particles);
   for (const key of Object.keys(screens)) setScreen(key, false);
   $('messageBox').classList.remove('visible'); S.keys.clear(); S.touch.firing = false;
@@ -283,6 +359,7 @@ function endGame() {
 }
 function updatePlayer(dt) {
   const p = S.player;
+  p.muzzleFlash = Math.max(0, p.muzzleFlash - dt);
   let forward = (S.keys.has('w') ? 1 : 0) - (S.keys.has('s') ? 1 : 0) - S.touch.y;
   let side = (S.keys.has('d') ? 1 : 0) - (S.keys.has('a') ? 1 : 0) + S.touch.x;
   const length = Math.hypot(forward, side); if (length > 1) { forward /= length; side /= length; }
@@ -307,7 +384,7 @@ function updateBullets(dt) {
     const b = S.bullets[i]; b.pos.addScaledVector(b.vel, dt); b.life -= dt; b.mesh.position.copy(b.pos);
     let hit = false;
     for (const enemy of [...S.enemies]) {
-      if (b.pos.distanceTo(new THREE.Vector3(enemy.x, .7, enemy.z)) < enemy.radius + .12) { hitEnemy(enemy, b.damage); hit = true; break; }
+      if (b.pos.distanceTo(new THREE.Vector3(enemy.x, .7, enemy.z)) < enemy.radius + .12) { hitEnemy(enemy, b.damage, b.pos); hit = true; break; }
     }
     if (hit || b.life <= 0) { world.remove(b.mesh); S.bullets.splice(i, 1); }
   }
@@ -375,12 +452,30 @@ function update(dt) {
   updatePlayer(dt); if (S.touch.firing || S.keys.has('mouse')) fire();
   updateBullets(dt); updateEnemies(dt); updatePickups(dt); updateParticles(dt); updateWave(dt); updateHud(); drawMap();
 }
+function updateVisuals(dt) {
+  const direction = new THREE.Vector3(); camera.getWorldDirection(direction);
+  flashlight.position.copy(camera.position).addScaledVector(direction, .12);
+  flashlightTarget.position.copy(camera.position).addScaledVector(direction, 22);
+  const t = clock.getElapsed();
+  for (const { lamp, base, phase } of hazardLights) {
+    const pulse = .76 + .2 * Math.sin(t * 3.4 + phase) + .08 * Math.sin(t * 11 + phase * 2.1);
+    lamp.intensity = base * Math.max(.18, pulse);
+  }
+  for (const [kind, model] of Object.entries(weaponModels)) {
+    model.recoil = Math.max(0, model.recoil - dt * (kind === 'knife' ? 1.8 : 1.1));
+    model.group.position.z = -.72 + model.recoil;
+    model.group.rotation.x = -.08 + (kind === 'knife' ? model.recoil * 1.8 : -model.recoil * .7);
+    model.flash.visible = kind === S.player.weapon && S.player.muzzleFlash > 0;
+    model.flash.scale.setScalar(.6 + Math.random() * .8);
+  }
+}
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); }
 function animate() {
   clock.update();
   const dt = clamp(clock.getDelta(), .001, .04);
   floorShader.uniforms.uTime.value += dt;
   update(dt);
+  updateVisuals(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
